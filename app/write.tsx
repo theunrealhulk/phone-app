@@ -2,9 +2,19 @@ import { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, Animated, I18nManager } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 
+import basicWords from './data/basic.json';
+import mediumWords from './data/medium.json';
+import advancedWords from './data/advanced.json';
+
 const isRTL = I18nManager.isRTL;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+const wordData: Record<string, string[]> = {
+  basic: basicWords,
+  medium: mediumWords,
+  advanced: advancedWords,
+};
 
 const tashkeelLetters = [
   { key: '\u064E', label: 'ءَ' },
@@ -3746,14 +3756,18 @@ function stripTashkeel(text: string): string {
 }
 
 export default function WritingScreen() {
-  const { numDigits } = useLocalSearchParams();
+  const { level } = useLocalSearchParams();
   const [number, setNumber] = useState(0);
   const [typedText, setTypedText] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
 
+  const words = wordData[level as string] || basicWords;
+  const currentWord = words[number];
+  const normalizedWord = normalizeWord(normalizeArabic(currentWord));
+
   useEffect(() => {
-    setNumber(Math.floor(Math.random() * arabicWords.length));
-  }, []);
+    setNumber(Math.floor(Math.random() * words.length));
+  }, [level]);
 
   useEffect(() => {
     setTypedText('');
@@ -3768,14 +3782,11 @@ export default function WritingScreen() {
     if (isExactMatch && typedText.length > 0) {
       setShowSuccess(true);
       const timer = setTimeout(() => {
-        setNumber((prev) => Math.floor(Math.random() * arabicWords.length));
+        setNumber((prev) => Math.floor(Math.random() * words.length));
       }, 3000);
       return () => clearTimeout(timer);
     }
   }, [typedText]);
-
-  const currentWord = arabicWords[number];
-  const normalizedWord = normalizeWord(normalizeArabic(currentWord));
 
   function groupChars(word: string): string[] {
     const chars = [...word];

@@ -24,7 +24,7 @@ export default function Index() {
           <Text style={styles.buttonText}>💵 النقود</Text>
         </Pressable>
       </Link>
-      <Link href="/write" asChild>
+      <Link href="/write-level" asChild>
         <Pressable style={styles.button}>
           <Text style={styles.buttonText}>📄 الكتابة</Text>
         </Pressable>

@@ -39,6 +39,17 @@ export default function RootLayout() {
           </Pressable>
         ),
       }} />
+      <Stack.Screen name="write-level" options={{ 
+        headerShown: true,
+        headerTitle: '',
+        headerStyle: { backgroundColor: '#fff', height: 0 },
+        headerShadowVisible: false,
+        headerLeft: () => (
+          <Pressable onPress={() => router.back()} style={{ padding: 8 }}>
+            <Text style={{ fontSize: 24 }}>←</Text>
+          </Pressable>
+        ),
+      }} />
     </Stack>
   );
 }
