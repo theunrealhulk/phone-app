@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, Platform, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, Platform, Animated, I18nManager } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
+
+const isRTL = I18nManager.isRTL;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -3925,12 +3927,21 @@ export default function WritingScreen() {
       <View style={styles.header}>
         <Text style={styles.wordText}>{currentWord}</Text>
         <View style={styles.typedRow}>
-          <Text style={[styles.typedText, { color: getTypedColor() }]}>
-            {typedText || '...'}
-          </Text>
-          <Pressable style={styles.deleteButton} onPress={() => setTypedText((prev) => prev.slice(0, -1))}>
-            <Text style={styles.deleteButtonText}>⌫</Text>
-          </Pressable>
+          <View style={styles.iconColumn}>
+            <Text style={styles.statusEmoji}>
+              {typedText.length === 0 ? '' : getTypedColor() === '#4CAF50' ? '👍' : getTypedColor() === '#FF9800' ? '😳' : '😡'}
+            </Text>
+          </View>
+          <View style={styles.textColumn}>
+            <Text style={[styles.typedText, { color: getTypedColor() }]}>
+              {typedText || '...'}
+            </Text>
+          </View>
+          <View style={styles.iconColumn}>
+            <Pressable style={styles.deleteButton} onPress={() => setTypedText((prev) => prev.slice(0, -1))}>
+              <Text style={styles.deleteButtonText}>⌫</Text>
+            </Pressable>
+          </View>
         </View>
         
       </View>
@@ -4003,8 +4014,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#666',
     textAlign: 'center',
-    minHeight: 60,
+    minHeight: 85,
     flex: 1,
+    writingDirection: isRTL ? 'rtl' : 'ltr',
   },
   typedPlaceholder: {
     fontSize: 52,
@@ -4013,9 +4025,22 @@ const styles = StyleSheet.create({
   typedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     marginTop: 12,
     paddingHorizontal: 10,
+  },
+  iconColumn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textColumn: {
+    flex: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusEmoji: {
+    fontSize: 32,
   },
   deleteButton: {
     marginLeft: 10,
@@ -4061,11 +4086,14 @@ tashkeelKey: {
     justifyContent: 'center',
     flex: 1,
     maxWidth: 58,
+    maxHeight: 55,
   },
   tashkeelText: {
     fontSize: 50,
     color: '#1a5f7a',
     fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 50,
   },
 tashkeelRow: {
     flexDirection: 'row',
