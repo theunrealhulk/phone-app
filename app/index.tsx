@@ -29,6 +29,11 @@ export default function Index() {
           <Text style={styles.buttonText}>📄 الكتابة</Text>
         </Pressable>
       </Link>
+      <Link href="/read-level" asChild>
+        <Pressable style={styles.button}>
+          <Text style={styles.buttonText}>🎤 القراءة</Text>
+        </Pressable>
+      </Link>
       <Pressable style={[styles.button, styles.exitButton]} onPress={handleExit}>
         <Text style={styles.buttonText}>🚪 خروج</Text>
       </Pressable>
@@ -55,7 +60,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingVertical: 16,
     borderRadius: 8,
-    minWidth: 200,
+    minWidth: 220,
     alignItems: 'center',
   },
   exitButton: {
