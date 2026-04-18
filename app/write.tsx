@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, Animated, I18nManager } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import basicWords from './data/basic.json';
 import mediumWords from './data/medium.json';
@@ -3757,17 +3758,58 @@ function stripTashkeel(text: string): string {
 
 export default function WritingScreen() {
   const { level } = useLocalSearchParams();
+  const router = useRouter();
   const [number, setNumber] = useState(0);
   const [typedText, setTypedText] = useState('');
   const [showSuccess, setShowSuccess] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [showComplete, setShowComplete] = useState(false);
 
   const words = wordData[level as string] || basicWords;
   const currentWord = words[number];
+  const [correctWords, setCorrectWords] = useState<string[]>([]);
+  const correctWordsRef = useRef<string[]>([]);
+  correctWordsRef.current = correctWords;
+
+  useEffect(() => {
+    const loadCorrectWords = async () => {
+      setLoading(true);
+      try {
+        const stored = await AsyncStorage.getItem(`correctWords_${level}`);
+        if (stored) {
+          setCorrectWords(JSON.parse(stored));
+        }
+      } catch (e) {}
+      setLoading(false);
+    };
+    loadCorrectWords();
+  }, [level]);
+
+  const saveCorrectWord = async (word: string) => {
+    try {
+      const newCorrect = [...correctWords, word];
+      setCorrectWords(newCorrect);
+      await AsyncStorage.setItem(`correctWords_${level}`, JSON.stringify(newCorrect));
+      if (newCorrect.length >= words.length) {
+        setShowComplete(true);
+      }
+    } catch (e) {}
+  };
   const normalizedWord = normalizeWord(normalizeArabic(currentWord));
 
   useEffect(() => {
-    setNumber(Math.floor(Math.random() * words.length));
-  }, [level]);
+    if (loading) return;
+    if (correctWords.length >= words.length) {
+      setShowComplete(true);
+      return;
+    }
+    const availableWords = words.filter((w: string) => !correctWords.includes(w));
+    if (availableWords.length > 0) {
+      setNumber(words.indexOf(availableWords[Math.floor(Math.random() * availableWords.length)]));
+    } else {
+      setNumber(Math.floor(Math.random() * words.length));
+    }
+  }, [level, loading, correctWords]);
 
   useEffect(() => {
     setTypedText('');
@@ -3781,8 +3823,16 @@ export default function WritingScreen() {
       typedGroups.every((g, i) => g === correctGroups[i]);
     if (isExactMatch && typedText.length > 0) {
       setShowSuccess(true);
+      if (!correctWords.includes(currentWord)) {
+        saveCorrectWord(currentWord);
+      }
       const timer = setTimeout(() => {
-        setNumber((prev) => Math.floor(Math.random() * words.length));
+        const availableWords = words.filter((w: string) => !correctWordsRef.current.includes(w));
+        if (availableWords.length > 0) {
+          setNumber(words.indexOf(availableWords[Math.floor(Math.random() * availableWords.length)]));
+        } else {
+          setNumber(Math.floor(Math.random() * words.length));
+        }
       }, 3000);
       return () => clearTimeout(timer);
     }
@@ -3956,7 +4006,7 @@ export default function WritingScreen() {
         </View>
         
       </View>
-      <View style={styles.keyboardContainer}>
+<View style={styles.keyboardContainer}>
         <View style={styles.tashkeelRow}>
           {tashkeelLetters.slice(0, 5).map((item, index) => (
             <KeyButton
@@ -3999,6 +4049,24 @@ export default function WritingScreen() {
         <View style={styles.popup}>
           <Text style={styles.popupText}>✅</Text>
           <Text style={styles.popupSubtext}>أحسنت!</Text>
+        </View>
+      )}
+      {showComplete && (
+        <View style={[styles.popup, { backgroundColor: 'rgba(0, 122, 255, 0.95)' }]}>
+          <Text style={[styles.popupText, { fontSize: 36 }]}>لقد أتممتم جميع التمارين</Text>
+          <Text style={styles.popupSubtext}>هل تريدون الإعادة مرة أخرى؟</Text>
+          <View style={{ flexDirection: 'row', marginTop: 32, gap: 20 }}>
+            <Pressable style={[styles.popupButton, { backgroundColor: '#fff' }]} onPress={async () => {
+              await AsyncStorage.removeItem(`correctWords_${level}`);
+              setShowComplete(false);
+              setCorrectWords([]);
+            }}>
+              <Text style={[styles.popupButtonText, { color: '#007AFF' }]}>نعم</Text>
+            </Pressable>
+            <Pressable style={[styles.popupButton, { backgroundColor: '#fff' }]} onPress={() => router.back()}>
+              <Text style={[styles.popupButtonText, { color: '#007AFF' }]}>لا</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </View>
@@ -4157,5 +4225,14 @@ tashkeelRow: {
     color: '#fff',
     fontWeight: 'bold',
     marginTop: 20,
+  },
+  popupButton: {
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 8,
+  },
+  popupButtonText: {
+    fontSize: 24,
+    fontWeight: 'bold',
   },
 });

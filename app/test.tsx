@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, ImageBackground, ImageSourcePropType, ScrollView } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const buttonValues = [200, 100, 50, 20, 10, 5, 2, 1];
+const allButtonValues = [200, 100, 50, 20, 10, 5, 2, 1];
 
 const buttonImages: Record<number, ImageSourcePropType> = {
   200: require('../assets/images/200.jpg'),
@@ -17,18 +18,41 @@ const buttonImages: Record<number, ImageSourcePropType> = {
 
 export default function TestScreen() {
   const { numDigits } = useLocalSearchParams();
+  const router = useRouter();
   const [number, setNumber] = useState(0);
   const [counts, setCounts] = useState<Record<number, number>>({});
   const [clickHistory, setClickHistory] = useState<{value: number, id: number}[]>([]);
   const [popup, setPopup] = useState<{show: boolean, success: boolean}>({show: false, success: false});
+  const [showComplete, setShowComplete] = useState(false);
+  const showOverlay = popup.show || showComplete;
+  const digits = parseInt(numDigits as string);
 
   useEffect(() => {
-    const digits = parseInt(numDigits as string);
-    const min = Math.pow(10, digits - 1);
-    const max = Math.pow(10, digits) - 1;
-    const randomNum = Math.floor(Math.random() * (max - min + 1)) + min;
-    setNumber(randomNum);
+    const d = parseInt(numDigits as string);
+    const min = Math.pow(10, d - 1);
+    const max = Math.pow(10, d) - 1;
+    loadAndGenerateNumber(min, max);
   }, [numDigits]);
+
+  const loadAndGenerateNumber = async (min: number, max: number) => {
+    try {
+      const stored = await AsyncStorage.getItem(`moneyCorrect_${numDigits}`);
+      const correctAmounts: number[] = stored ? JSON.parse(stored) : [];
+      const available: number[] = [];
+      for (let i = min; i <= max; i++) {
+        if (!correctAmounts.includes(i)) {
+          available.push(i);
+        }
+      }
+      if (available.length > 0) {
+        setNumber(available[Math.floor(Math.random() * available.length)]);
+      } else {
+        setShowComplete(true);
+      }
+    } catch (e) {
+      setNumber(Math.floor(Math.random() * (max - min + 1)) + min);
+    }
+  };
 
   const formatNumber = (num: number) => {
     return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -89,32 +113,48 @@ export default function TestScreen() {
 
   const total = Object.entries(counts).reduce((sum, [value, count]) => sum + parseInt(value) * count, 0);
 
-  const generateNewNumber = () => {
-    const digits = parseInt(numDigits as string);
+  const generateNewNumber = async () => {
     const min = Math.pow(10, digits - 1);
     const max = Math.pow(10, digits) - 1;
-    return Math.floor(Math.random() * (max - min + 1)) + min;
+    await loadAndGenerateNumber(min, max);
   };
 
-  const checkAnswer = () => {
+  const checkAnswer = async () => {
     if (total === number) {
       setPopup({show: true, success: true});
-      setTimeout(() => {
+      const key = `moneyCorrect_${numDigits}`;
+      try {
+        const stored = await AsyncStorage.getItem(key);
+        const correctAmounts: number[] = stored ? JSON.parse(stored) : [];
+        if (!correctAmounts.includes(number)) {
+          const newCorrect = [...correctAmounts, number];
+          await AsyncStorage.setItem(key, JSON.stringify(newCorrect));
+          const max = Math.pow(10, digits) - 1;
+          if (newCorrect.length >= max) {
+            setTimeout(() => {
+              setShowComplete(true);
+            }, 3000);
+            return;
+          }
+        }
+      } catch (e) {}
+      setTimeout(async () => {
         setPopup({show: false, success: true});
         setCounts({});
         setClickHistory([]);
-        setNumber(generateNewNumber());
-      }, 3000);
+        await generateNewNumber();
+      }, 1000);
     } else {
       setPopup({show: true, success: false});
       setTimeout(() => {
         setPopup({show: false, success: false});
-      }, 3000);
+      }, 1000);
     }
   };
-
-  const digits = parseInt(numDigits as string);
   const useGrayText = digits >= 4;
+  const buttonValues = digits === 2 
+    ? allButtonValues.filter(v => v < 100)
+    : allButtonValues;
 
   return (
     <View style={styles.container}>
@@ -151,44 +191,103 @@ export default function TestScreen() {
           </ScrollView>
         </View>
       )}
-      <View style={styles.gridContainer}>
-        <View style={styles.row}>
-          {buttonValues.slice(0, 4).map((value) => (
-            <View key={value} style={styles.buttonWrapper}>
-              <Pressable onPress={() => handlePress(value)}>
-                <ImageBackground source={buttonImages[value]} style={styles.gridButton} imageStyle={{ resizeMode: 'cover' }} />
-              </Pressable>
-              {counts[value] > 0 && (
-                <Pressable style={styles.badge} onPress={(e) => decreaseCount(value, e)}>
-                  <View style={styles.badgeInner}>
-                    <Text style={styles.badgeText}>{counts[value]}</Text>
-                  </View>
-                </Pressable>
-              )}
+      <View style={[styles.gridContainer, showOverlay && styles.gridContainerOverlay]}>
+        {digits === 2 ? (
+          <>
+            <View style={[styles.row, { width: '75%' }]}>
+              {buttonValues.slice(0, 3).map((value) => (
+                <View key={value} style={[styles.buttonWrapper, { width: '33.33%' }]}>
+                  <Pressable onPress={() => handlePress(value)}>
+                    <ImageBackground source={buttonImages[value]} style={styles.gridButton} imageStyle={{ resizeMode: 'cover' }} />
+                  </Pressable>
+                  {counts[value] > 0 && (
+                    <Pressable style={styles.badge} onPress={(e) => decreaseCount(value, e)}>
+                      <View style={styles.badgeInner}>
+                        <Text style={styles.badgeText}>{counts[value]}</Text>
+                      </View>
+                    </Pressable>
+                  )}
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
-        <View style={styles.row}>
-          {buttonValues.slice(4, 8).map((value) => (
-            <View key={value} style={styles.buttonWrapper}>
-              <Pressable onPress={() => handlePress(value)}>
-                <ImageBackground source={buttonImages[value]} style={styles.gridButton} imageStyle={{ resizeMode: 'cover' }} />
-              </Pressable>
-              {counts[value] > 0 && (
-                <Pressable style={styles.badge} onPress={(e) => decreaseCount(value, e)}>
-                  <View style={styles.badgeInner}>
-                    <Text style={styles.badgeText}>{counts[value]}</Text>
-                  </View>
-                </Pressable>
-              )}
+            <View style={[styles.row, { width: '75%' }]}>
+              {buttonValues.slice(3, 6).map((value) => (
+                <View key={value} style={[styles.buttonWrapper, { width: '33.33%' }]}>
+                  <Pressable onPress={() => handlePress(value)}>
+                    <ImageBackground source={buttonImages[value]} style={styles.gridButton} imageStyle={{ resizeMode: 'cover' }} />
+                  </Pressable>
+                  {counts[value] > 0 && (
+                    <Pressable style={styles.badge} onPress={(e) => decreaseCount(value, e)}>
+                      <View style={styles.badgeInner}>
+                        <Text style={styles.badgeText}>{counts[value]}</Text>
+                      </View>
+                    </Pressable>
+                  )}
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.row}>
+              {buttonValues.slice(0, 4).map((value) => (
+                <View key={value} style={styles.buttonWrapper}>
+                  <Pressable onPress={() => handlePress(value)}>
+                    <ImageBackground source={buttonImages[value]} style={styles.gridButton} imageStyle={{ resizeMode: 'cover' }} />
+                  </Pressable>
+                  {counts[value] > 0 && (
+                    <Pressable style={styles.badge} onPress={(e) => decreaseCount(value, e)}>
+                      <View style={styles.badgeInner}>
+                        <Text style={styles.badgeText}>{counts[value]}</Text>
+                      </View>
+                    </Pressable>
+                  )}
+                </View>
+              ))}
+            </View>
+            <View style={styles.row}>
+              {buttonValues.slice(4, 8).map((value) => (
+                <View key={value} style={styles.buttonWrapper}>
+                  <Pressable onPress={() => handlePress(value)}>
+                    <ImageBackground source={buttonImages[value]} style={styles.gridButton} imageStyle={{ resizeMode: 'cover' }} />
+                  </Pressable>
+                  {counts[value] > 0 && (
+                    <Pressable style={styles.badge} onPress={(e) => decreaseCount(value, e)}>
+                      <View style={styles.badgeInner}>
+                        <Text style={styles.badgeText}>{counts[value]}</Text>
+                      </View>
+                    </Pressable>
+                  )}
+                </View>
+              ))}
+            </View>
+          </>
+        )}
       </View>
       {popup.show && (
         <View style={[styles.popup, popup.success ? styles.popupSuccess : styles.popupError]}>
           <Text style={styles.popupText}>{popup.success ? '✅ صحيح' : '❌ خطأ'}</Text>
           <Text style={styles.popupSubtext}>{popup.success ? 'أحسنت! الجواب صحيح' : 'حاول مرة أخرى'}</Text>
+        </View>
+      )}
+      {showComplete && (
+        <View style={[styles.popup, styles.popupComplete]}>
+          <Text style={styles.completeText}>لقد أتممتم جميع التمارين</Text>
+          <Text style={styles.completeSubtext}>هل تريدون الإعادة مرة أخرى؟</Text>
+          <View style={styles.completeButtons}>
+            <Pressable style={styles.completeButton} onPress={async () => {
+              await AsyncStorage.removeItem(`moneyCorrect_${numDigits}`);
+              setShowComplete(false);
+              await generateNewNumber();
+            }}>
+              <Text style={styles.completeButtonText}>نعم</Text>
+            </Pressable>
+            <Pressable style={styles.completeButton} onPress={() => {
+              router.back();
+            }}>
+              <Text style={styles.completeButtonText}>لا</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </View>
@@ -290,6 +389,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#E0E0E0',
+    alignItems: 'center',
+  },
+  gridContainerOverlay: {
+    opacity: 0,
   },
   row: {
     flexDirection: 'row',
@@ -310,8 +413,9 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
-    top: -8,
-    right: -8,
+    top: -4,
+    left: -4,
+    zIndex: 5,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -338,6 +442,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 1000,
   },
   popupSuccess: {
     backgroundColor: 'rgba(0, 200, 0, 0.9)',
@@ -354,5 +459,37 @@ const styles = StyleSheet.create({
     fontSize: 32,
     color: '#fff',
     marginTop: 16,
+  },
+  popupComplete: {
+    backgroundColor: 'rgba(0, 122, 255, 0.95)',
+    zIndex: 200,
+  },
+  completeText: {
+    fontSize: 36,
+    color: '#fff',
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  completeSubtext: {
+    fontSize: 24,
+    color: '#fff',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  completeButtons: {
+    flexDirection: 'row',
+    marginTop: 32,
+    gap: 20,
+  },
+  completeButton: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 32,
+    paddingVertical: 16,
+    borderRadius: 8,
+  },
+  completeButtonText: {
+    fontSize: 24,
+    color: '#007AFF',
+    fontWeight: 'bold',
   },
 });
